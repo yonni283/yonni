@@ -146,6 +146,10 @@ let autoDodgeReady = true;
 let phaseReady = true;
 let phoenixUsed = false;
 
+// ========== DELTA TIME FIX ==========
+let lastTime = 0;
+let deltaTime = 1;
+
 // ========== FIREBASE LEADERBOARD ==========
 let leaderboard = [];
 let personalBest = parseInt(localStorage.getItem('personalBest')) || 0;
@@ -646,31 +650,43 @@ function handleHit(meteor) {
   autoUpdateLeaderboard(score);
 }
 
-// ========== UPDATE ==========
-function update() {
+// ========== UPDATE (WITH DELTATIME FIX) ==========
+function update(timestamp) {
+  // Calculate deltaTime
+  if (!lastTime) lastTime = timestamp;
+  deltaTime = (timestamp - lastTime) / 16.67;
+  if (deltaTime > 4) deltaTime = 4;
+  lastTime = timestamp;
+  
   stars.forEach(star => {
-    star.y += star.speed;
-    star.twinkle += star.twinkleSpeed;
+    star.y += star.speed * deltaTime;
+    star.twinkle += star.twinkleSpeed * deltaTime;
     if (star.y > H) { star.y = 0; star.x = Math.random() * W; }
   });
   
-  updateParticles();
+  for (let i = particles.length - 1; i >= 0; i--) {
+    let p = particles[i];
+    p.x += p.vx * deltaTime;
+    p.y += p.vy * deltaTime;
+    p.life -= p.decay * deltaTime;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
   
   if (slowMotionActive) {
-    slowMotionTimer--;
+    slowMotionTimer -= deltaTime;
     if (slowMotionTimer <= 0) {
       deactivateSlowMotion();
       updatePowerUI();
     }
   }
   if (slowMotionCooldown > 0) {
-    slowMotionCooldown--;
+    slowMotionCooldown -= deltaTime;
     if (slowMotionCooldown === 0) updatePowerUI();
   }
-  if (frameCounter % 10 === 0) updatePowerUI();
+  if (Math.floor(frameCounter) % 10 === 0) updatePowerUI();
   
   if (freezeActive) {
-    freezeTimer--;
+    freezeTimer -= deltaTime;
     if (freezeTimer <= 0) {
       freezeActive = false;
       meteors.forEach(m => {
@@ -687,10 +703,10 @@ function update() {
   if (!gameActive || gameOver) { updateDeathButtons(); return; }
   
   const moveSpeed = hasPower('speedBoost') ? 0.35 : 0.2;
-  player.x += (Math.min(Math.max(mouseX, player.radius), W-player.radius) - player.x) * moveSpeed;
-  player.y += (Math.min(Math.max(mouseY, player.radius), H-player.radius) - player.y) * moveSpeed;
+  player.x += (Math.min(Math.max(mouseX, player.radius), W-player.radius) - player.x) * moveSpeed * deltaTime;
+  player.y += (Math.min(Math.max(mouseY, player.radius), H-player.radius) - player.y) * moveSpeed * deltaTime;
   
-  if (hasPower('healOverTime') && frameCounter % 120 === 0) {
+  if (hasPower('healOverTime') && Math.floor(frameCounter) % 120 === 0) {
     addCoins(1);
   }
   
@@ -700,8 +716,8 @@ function update() {
       const dy = player.y - c.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 150 && dist > 0) {
-        c.x += dx / dist * 1.5;
-        c.y += dy / dist * 1.5;
+        c.x += (dx / dist) * 1.5 * deltaTime;
+        c.y += (dy / dist) * 1.5 * deltaTime;
       }
     });
   }
@@ -709,16 +725,20 @@ function update() {
   currentSpeedMultiplier = Math.min(MAX_MULTIPLIER, 1.0 + Math.floor(score/5)*0.18);
   spawnDelay = Math.max(16, 38 - Math.floor(score/4)*2);
   
-  if (++frameCounter % spawnDelay === 0) {
+  frameCounter += deltaTime;
+  if (frameCounter >= spawnDelay) {
+    frameCounter = 0;
     spawnMeteor();
     if (score>10 && Math.random()<0.45) spawnMeteor();
     if (score>25 && Math.random()<0.3) spawnMeteor();
   }
-  if (frameCounter % 55 === 0 && Math.random()<0.7) spawnCoin();
+  if (Math.floor(frameCounter) % 55 === 0 && Math.random()<0.7) spawnCoin();
   
   for (let i=meteors.length-1; i>=0; i--) {
     let m = meteors[i];
-    m.y += m.speedY; m.x += m.speedX; m.rotation += m.rotationSpeed;
+    m.y += m.speedY * deltaTime;
+    m.x += m.speedX * deltaTime;
+    m.rotation += m.rotationSpeed * deltaTime;
     if (m.y-m.radius>H+45 || m.x+m.radius<-35 || m.x-m.radius>W+35) {
       meteors.splice(i,1);
       if (gameActive && !gameOver) { score++; updateUI(); }
@@ -727,7 +747,8 @@ function update() {
   
   for (let i=coins.length-1; i>=0; i--) {
     let c = coins[i];
-    c.y += c.speed; c.rotation += c.rotationSpeed;
+    c.y += c.speed * deltaTime;
+    c.rotation += c.rotationSpeed * deltaTime;
     if (c.y-c.radius > H+30) { coins.splice(i,1); continue; }
     if (gameActive && !gameOver && checkCollision(player, c)) {
       addCoins(c.value);
@@ -736,14 +757,6 @@ function update() {
     }
   }
   updateUI();
-}
-
-function updateParticles() {
-  for (let i=particles.length-1; i>=0; i--) {
-    let p = particles[i];
-    p.x += p.vx; p.y += p.vy;
-    if ((p.life -= p.decay) <= 0) particles.splice(i,1);
-  }
 }
 
 // ========== DRAWING ==========
@@ -934,11 +947,11 @@ function init() {
   
   updateCoinDisplay();
   restartGame();
-  gameLoop();
+  requestAnimationFrame(gameLoop);
 }
 
-function gameLoop() {
-  update();
+function gameLoop(timestamp) {
+  update(timestamp);
   drawAll();
   requestAnimationFrame(gameLoop);
 }
