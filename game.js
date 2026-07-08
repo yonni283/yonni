@@ -1,7 +1,36 @@
 // ============================================
 // METEOR DODGE - FIREBASE GLOBAL LEADERBOARD
 // ============================================
+// ============================================
+// METEOR DODGE - BLOCK CONSOLE CHEATS
+// ============================================
 
+// Block console access
+(function() {
+  // Disable right-click
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  
+  // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+        (e.ctrlKey && e.key === 'U')) {
+      e.preventDefault();
+      return false;
+    }
+  });
+  
+  // Detect devtools
+  setInterval(function() {
+    const before = new Date();
+    debugger;
+    const after = new Date();
+    if (after - before > 100) {
+      // DevTools is open
+      document.body.innerHTML = '<h1 style="color:red;text-align:center;margin-top:200px;">🚫 Console is disabled!</h1>';
+    }
+  }, 1000);
+})();
 // ========== FIREBASE CONFIG ==========
 const firebaseConfig = {
   apiKey: "AIzaSyBpS23wdkpOU6ysuRRCpu6Q8fTrcmJd0GI",
