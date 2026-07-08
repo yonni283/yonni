@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>🌠 METEOR DODGE · 15 SKINS</title>
+  <title>🌠 METEOR DODGE · 15 SKINS · GLOBAL</title>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -29,9 +34,12 @@
     </div>
   </div>
   
+  <!-- RESET BUTTON - Always visible -->
+
+  
   <div class="leaderboard">
-    <h3>🏆 LEADERBOARD <span>(top 5)</span></h3>
-    <ol id="leaderboardList"><li>—</li></ol>
+    <h3>🌍 GLOBAL LEADERBOARD <span>(top 5)</span></h3>
+    <ol id="leaderboardList"><li>Loading...</li></ol>
   </div>
   
   <div class="hint-text">🖱️ Move mouse/touch · Collect 🪙 · Buy skins for powers!</div>
