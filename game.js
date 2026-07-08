@@ -1,6 +1,21 @@
-<!-- -->// ============================================
-// METEOR DODGE - 15 SKINS + ALL POWERS (FIXED)
 // ============================================
+// METEOR DODGE - FIREBASE GLOBAL LEADERBOARD
+// ============================================
+
+// ========== FIREBASE CONFIG ==========
+const firebaseConfig = {
+  apiKey: "AIzaSyBpS23wdkpOU6ysuRRCpu6Q8fTrcmJd0GI",
+  authDomain: "meteor-dodge-67611.firebaseapp.com",
+  databaseURL: "https://meteor-dodge-67611-default-rtdb.firebaseio.com",
+  projectId: "meteor-dodge-67611",
+  storageBucket: "meteor-dodge-67611.firebasestorage.app",
+  messagingSenderId: "1092152638850",
+  appId: "1:1092152638850:web:b474c0396eb21206f9239b"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -102,10 +117,109 @@ let autoDodgeReady = true;
 let phaseReady = true;
 let phoenixUsed = false;
 
-// ========== LEADERBOARD ==========
+// ========== FIREBASE LEADERBOARD ==========
 let leaderboard = [];
 let personalBest = parseInt(localStorage.getItem('personalBest')) || 0;
 let pendingScore = 0;
+
+function loadLeaderboard() {
+  db.ref('leaderboard').once('value').then((snapshot) => {
+    leaderboard = [];
+    snapshot.forEach((child) => {
+      leaderboard.push(child.val());
+    });
+    leaderboard.sort((a, b) => b.score - a.score);
+    if (leaderboard.length > 5) leaderboard = leaderboard.slice(0, 5);
+    renderLeaderboard();
+  }).catch((error) => {
+    console.log("Firebase load error:", error);
+    leaderboardList.innerHTML = '<li style="justify-content:center;">Error loading</li>';
+  });
+  
+  db.ref('leaderboard').on('child_added', () => {
+    db.ref('leaderboard').once('value').then((snapshot) => {
+      leaderboard = [];
+      snapshot.forEach((child) => { leaderboard.push(child.val()); });
+      leaderboard.sort((a, b) => b.score - a.score);
+      if (leaderboard.length > 5) leaderboard = leaderboard.slice(0, 5);
+      renderLeaderboard();
+    });
+  });
+}
+
+function saveScoreToFirebase(name, score) {
+  db.ref('leaderboard').push({
+    name: name,
+    score: score,
+    date: new Date().toLocaleDateString()
+  }).then(() => {
+    console.log("Score saved to Firebase!");
+    showNotification('🌍 Score saved globally!');
+  }).catch((error) => {
+    console.log("Firebase save error:", error);
+    showNotification('❌ Error saving score');
+  });
+}
+
+function autoUpdateLeaderboard(finalScore) {
+  console.log("Checking record - Score:", finalScore, "Best:", personalBest, "Name:", playerName);
+  
+  if (finalScore <= 10) {
+    console.log("Score too low, skipping leaderboard");
+    return;
+  }
+  
+  if (finalScore > personalBest) {
+    console.log("NEW RECORD! Updating...");
+    personalBest = finalScore;
+    localStorage.setItem('personalBest', personalBest);
+    
+    if (playerName && playerName.trim() !== '') {
+      console.log("Saving with existing name:", playerName);
+      saveScoreToFirebase(playerName, finalScore);
+    } else {
+      console.log("No name saved, showing name entry popup");
+      setTimeout(() => showNameEntry(finalScore), 800);
+    }
+  } else {
+    console.log("Not a new record. Current best is:", personalBest);
+  }
+}
+
+function showNameEntry(finalScore) {
+  pendingScore = finalScore;
+  finalScoreDisplay.textContent = finalScore;
+  playerNameInput.value = '';
+  nameModal.classList.add('active');
+  setTimeout(() => playerNameInput.focus(), 300);
+}
+
+function submitScore() {
+  const name = playerNameInput.value.trim();
+  if (!name) { showNotification('Enter a name!'); return; }
+  playerName = name;
+  localStorage.setItem('playerName', playerName);
+  saveScoreToFirebase(playerName, pendingScore);
+  nameModal.classList.remove('active');
+  showNotification('🏆 Name saved forever!');
+}
+
+function skipLeaderboard() { nameModal.classList.remove('active'); }
+
+function renderLeaderboard() {
+  if (!leaderboardList) return;
+  leaderboardList.innerHTML = '';
+  if (leaderboard.length === 0) {
+    leaderboardList.innerHTML = '<li style="justify-content:center;">No scores yet - Score 10+ to add!</li>';
+    return;
+  }
+  const top5 = leaderboard.slice(0, 5);
+  top5.forEach((entry, idx) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>#${idx+1} ${entry.name || 'Player'}</span><span>${entry.score} pts</span>`;
+    leaderboardList.appendChild(li);
+  });
+}
 
 // ========== POWER HELPERS ==========
 function hasPower(power) {
@@ -310,48 +424,6 @@ function showNotification(message) {
   setTimeout(() => notif.remove(), 2000);
 }
 
-// ========== LEADERBOARD ==========
-function autoUpdateLeaderboard(finalScore) {
-  if (finalScore <= 10) return;
-  if (finalScore <= personalBest) return;
-  
-  personalBest = finalScore;
-  localStorage.setItem('personalBest', personalBest);
-  
-  if (playerName && playerName.trim() !== '') {
-    leaderboard = leaderboard.filter(entry => entry.name !== playerName);
-    leaderboard.push({ name: playerName, score: finalScore, date: new Date().toLocaleDateString() });
-    saveLeaderboard();
-    renderLeaderboard();
-    showNotification('🏆 Record auto-saved, ' + playerName + '!');
-  } else {
-    setTimeout(() => showNameEntry(finalScore), 800);
-  }
-}
-
-function showNameEntry(finalScore) {
-  pendingScore = finalScore;
-  finalScoreDisplay.textContent = finalScore;
-  playerNameInput.value = '';
-  nameModal.classList.add('active');
-  setTimeout(() => playerNameInput.focus(), 300);
-}
-
-function submitScore() {
-  const name = playerNameInput.value.trim();
-  if (!name) { showNotification('Enter a name!'); return; }
-  playerName = name;
-  localStorage.setItem('playerName', playerName);
-  leaderboard = leaderboard.filter(entry => entry.name !== playerName);
-  leaderboard.push({ name: playerName, score: pendingScore, date: new Date().toLocaleDateString() });
-  saveLeaderboard();
-  renderLeaderboard();
-  nameModal.classList.remove('active');
-  showNotification('🏆 Name saved forever!');
-}
-
-function skipLeaderboard() { nameModal.classList.remove('active'); }
-
 // ========== REVIVE ==========
 function revivePlayer() {
   if (totalCoins < 30 || !gameOver) return;
@@ -377,30 +449,6 @@ function openShop() {
   renderShop();
 }
 function closeShop() { shopModal.classList.remove('active'); }
-
-// ========== LEADERBOARD STORAGE ==========
-function loadLeaderboard() {
-  try { leaderboard = JSON.parse(localStorage.getItem('meteorDodgeLeaderboard')) || []; }
-  catch(e) { leaderboard = []; }
-  leaderboard.sort((a, b) => b.score - a.score);
-  if (leaderboard.length > 5) leaderboard = leaderboard.slice(0, 5);
-}
-
-function saveLeaderboard() {
-  leaderboard.sort((a, b) => b.score - a.score);
-  if (leaderboard.length > 5) leaderboard = leaderboard.slice(0, 5);
-  localStorage.setItem('meteorDodgeLeaderboard', JSON.stringify(leaderboard));
-}
-
-function renderLeaderboard() {
-  if (!leaderboardList) return;
-  leaderboardList.innerHTML = leaderboard.length ? '' : '<li style="justify-content:center;">No scores yet</li>';
-  leaderboard.forEach((entry, idx) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span>#${idx+1} ${entry.name || 'Player'}</span><span>${entry.score} pts</span>`;
-    leaderboardList.appendChild(li);
-  });
-}
 
 // ========== GAME FUNCTIONS ==========
 function startGame() { gameActive = true; gameStarted = true; updatePowerUI(); }
@@ -827,7 +875,6 @@ function handleMouseMove(e) {
 
 function init() {
   loadLeaderboard();
-  renderLeaderboard();
   
   canvas.addEventListener('mousemove', handleMouseMove);
   canvas.addEventListener('touchmove', e => { e.preventDefault(); handleMouseMove(e); }, { passive: false });
